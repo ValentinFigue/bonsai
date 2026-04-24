@@ -1,0 +1,10 @@
+{
+  "name": "claude-pytools",
+  "description": "AST-based Python refactoring tools for Claude Code: find references, detect dead code, rename symbols, move files/symbols, and change function signatures — all without a language server.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Valentin Figué",
+    "email": "valentin.figue@orange.fr"
+  },
+  "keywords": ["python", "refactoring", "ast", "rename", "dead-code", "imports", "mcp"]
+}

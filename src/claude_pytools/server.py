@@ -42,7 +42,7 @@ def pyfindrefs(target: str, project_root: str | None = None) -> str:
 
 @mcp.tool()
 def pycallers(target: str, project_root: str | None = None) -> str:
-    """Find every call site of a Python function or method across the project.
+    """Find every call site of a Python function or method across the project. Returns only call-type references, not imports or definitions. For all reference types use pyfindrefs.
 
     Args:
         target: Symbol in 'module:function' or 'module:Class.method' format. E.g. 'src.api.views:create_user'
@@ -91,7 +91,7 @@ def pymove(
     project_root: str | None = None,
     dry_run: bool = False,
 ) -> str:
-    """Move or rename a Python file/package and rewrite all import references across the project.
+    """Move or rename a Python file/package and rewrite all import references across the project. For moving a single function or class between files, use pymovesymbol instead.
 
     Args:
         source: Path to the Python file or package directory to move (relative or absolute)
@@ -115,7 +115,7 @@ def pymovesymbol(
     project_root: str | None = None,
     dry_run: bool = False,
 ) -> str:
-    """Move a single Python function or class to a different module, rewriting all imports.
+    """Move a single Python function or class to a different module, rewriting all imports. For moving an entire file or package, use pymove instead.
 
     Args:
         target: Symbol in 'module:Symbol' format. E.g. 'src.utils.helpers:format_date'
@@ -139,7 +139,7 @@ def pyrename(
     project_root: str | None = None,
     dry_run: bool = False,
 ) -> str:
-    """Scope-aware rename of a Python symbol (function, class, method, variable) across the entire project.
+    """Scope-aware rename of a Python symbol (function, class, method, variable, constant) across the entire project. Does not rename unrelated local variables that happen to share the name — only the symbol at the specified module path.
 
     Args:
         target: Symbol in 'module:Symbol' or 'module:Class.method' format. E.g. 'src.models:User'

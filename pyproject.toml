@@ -7,9 +7,34 @@ name = "claude-pytools"
 version = "0.1.0"
 description = "AST-based Python refactoring tools as a Claude Code MCP plugin"
 readme = "README.md"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
+authors = [
+    { name = "Valentin Figué", email = "valentin.figue@orange.fr" }
+]
+keywords = [
+    "claude", "claude-code", "mcp", "refactoring", "ast",
+    "python", "rename", "dead-code", "imports"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = ["mcp[cli]>=1.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/valentinfigue/claude-pytools"
+Repository = "https://github.com/valentinfigue/claude-pytools"
+Issues = "https://github.com/valentinfigue/claude-pytools/issues"
 
 [project.scripts]
 claude-pytools = "claude_pytools.__main__:main"

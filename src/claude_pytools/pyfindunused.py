@@ -13,9 +13,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from ._common import (
+    PyToolsConfig,
     collect_python_files,
     find_project_root,
     get_lines,
+    load_config,
     module_aliases_for_file,
     parse_file,
     python_roots,
@@ -47,7 +49,7 @@ _ENTRY_POINTS = {
 }
 
 # Directory names to skip for dead-code detection.
-_DEAD_SKIP = {"migrations", "tests", "test", "alembic"}
+_DEAD_SKIP: frozenset[str] = frozenset({"migrations", "tests", "test", "alembic"})
 
 
 @dataclass
@@ -91,17 +93,21 @@ def _snippet(fpath: Path, lineno: int) -> str:
     return ""
 
 
-def _skip_for_dead(fpath: Path) -> bool:
-    return any(part in _DEAD_SKIP for part in fpath.parts)
+def _skip_for_dead(fpath: Path, skip_dirs: frozenset[str]) -> bool:
+    return any(part in skip_dirs for part in fpath.parts)
 
 
 # ── dead code ─────────────────────────────────────────────────────────────────
 
 def find_dead_code(
-    all_files: list[Path], root: Path
+    all_files: list[Path], root: Path, config: PyToolsConfig = PyToolsConfig()
 ) -> list[UnusedResult]:
+    effective_decorators = _FRAMEWORK_DECORATORS | config.dead_code_extra_decorators
+    effective_entry_points = _ENTRY_POINTS | config.dead_code_extra_entry_points
+    effective_skip = _DEAD_SKIP | config.dead_code_extra_skip_dirs
+
     py_roots = python_roots(root)
-    files = [f for f in all_files if not _skip_for_dead(f)]
+    files = [f for f in all_files if not _skip_for_dead(f, effective_skip)]
 
     # Pass 1: collect top-level public definitions and __all__ per file
     defs: dict[str, tuple[Path, int, str]] = {}  # "mod:name" → (fpath, lineno, name)
@@ -139,11 +145,11 @@ def find_dead_code(
             name = node.name
             if name.startswith("_"):
                 continue
-            if name in _ENTRY_POINTS:
+            if name in effective_entry_points:
                 continue
             if name.startswith("test_") or name.endswith("_test"):
                 continue
-            if _decorator_names(node) & _FRAMEWORK_DECORATORS:
+            if _decorator_names(node) & effective_decorators:
                 continue
             for m in modules:
                 defs[f"{m}:{name}"] = (fpath, node.lineno, name)
@@ -377,6 +383,7 @@ def main() -> None:
     run_imports = args.imports or not any_flag
 
     root = Path(args.project_root) if args.project_root else find_project_root(Path.cwd())
+    config = load_config(root)
 
     if args.path:
         target = Path(args.path)
@@ -386,7 +393,7 @@ def main() -> None:
 
     results: list[UnusedResult] = []
     if run_dead:
-        results += find_dead_code(all_files, root)
+        results += find_dead_code(all_files, root, config)
     if run_params:
         results += find_unused_params(all_files, root)
     if run_imports:

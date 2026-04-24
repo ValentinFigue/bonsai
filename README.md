@@ -91,6 +91,27 @@ All mutating tools (`pymove`, `pymovesymbol`, `pyrename`, `pysignature`) support
 - **Public symbols only for dead-code detection.** `pyfindunused --dead-code` skips private symbols (names starting with `_`), framework-decorated functions, and test files — but may still produce false positives if symbols are referenced dynamically.
 - **Single project tree.** All tools operate on a project rooted at `pyproject.toml` / `.git`. For monorepos, pass `project_root` explicitly.
 
+## Configuration
+
+Add a `[tool.claude-pytools]` section to your project's `pyproject.toml` to extend the built-in defaults for dead-code detection.
+
+```toml
+[tool.claude-pytools]
+# Decorators that mark a function as framework-registered (won't be flagged as dead code).
+# Merged with the built-in list: get, post, route, task, fixture, classmethod, staticmethod, …
+dead_code_extra_decorators = ["api_view", "login_required", "permission_classes"]
+
+# Function names implicitly called by a framework or runtime (won't be flagged as dead code).
+# Merged with the built-in list: main, handler, lambda_handler, setUp, upgrade, …
+dead_code_extra_entry_points = ["run", "execute", "on_ready"]
+
+# Additional directory names to skip during dead-code scanning.
+# Merged with the built-in list: migrations, tests, test, alembic.
+dead_code_extra_skip_dirs = ["fixtures", "scripts", "docs"]
+```
+
+All three keys are additive — they extend the built-in defaults rather than replacing them.
+
 ## Development
 
 ```bash

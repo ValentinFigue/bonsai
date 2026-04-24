@@ -3,6 +3,38 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+
+@dataclass
+class PyToolsConfig:
+    dead_code_extra_decorators: frozenset[str] = frozenset()
+    dead_code_extra_entry_points: frozenset[str] = frozenset()
+    dead_code_extra_skip_dirs: frozenset[str] = frozenset()
+
+
+def load_config(root: Path) -> PyToolsConfig:
+    """Read [tool.claude-pytools] from the project's pyproject.toml, if present."""
+    pyproject = root / "pyproject.toml"
+    if not pyproject.exists():
+        return PyToolsConfig()
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-remodule]
+        except ImportError:
+            return PyToolsConfig()
+    try:
+        with pyproject.open("rb") as f:
+            data = tomllib.load(f)
+    except Exception:
+        return PyToolsConfig()
+    section = data.get("tool", {}).get("claude-pytools", {})
+    return PyToolsConfig(
+        dead_code_extra_decorators=frozenset(section.get("dead_code_extra_decorators", [])),
+        dead_code_extra_entry_points=frozenset(section.get("dead_code_extra_entry_points", [])),
+        dead_code_extra_skip_dirs=frozenset(section.get("dead_code_extra_skip_dirs", [])),
+    )
+
 SKIP_DIRS = {
     ".git", ".hg", ".svn", "__pycache__", ".mypy_cache", ".pytest_cache",
     ".tox", ".nox", ".venv", "venv", "env", ".env", "node_modules",

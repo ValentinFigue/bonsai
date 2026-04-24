@@ -29,7 +29,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Software Development :: Quality Assurance",
 ]
-dependencies = ["mcp[cli]>=1.0.0"]
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "tomli>=1.1.0; python_version < '3.11'",
+]
 
 [project.urls]
 Homepage = "https://github.com/valentinfigue/claude-pytools"
@@ -60,6 +63,4 @@ python = ".venv"
 python-version = "3.11"
 
 [tool.ty.rules]
-# False positives: else-branches of `if __package__:` use sys.path.insert for standalone CLI use;
-# ty can't follow runtime sys.path manipulation.
 unresolved-import = "ignore"

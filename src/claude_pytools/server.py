@@ -1,13 +1,22 @@
 import contextlib
 import io
 import sys
+from collections.abc import Callable
 
 from mcp.server.fastmcp import FastMCP
+
+from .pycallers import main as _pycallers_main
+from .pyfindrefs import main as _pyfindrefs_main
+from .pyfindunused import main as _pyfindunused_main
+from .pymove import main as _pymove_main
+from .pymovesymbol import main as _pymovesymbol_main
+from .pyrename import main as _pyrename_main
+from .pysignature import main as _pysignature_main
 
 mcp = FastMCP("pytools")
 
 
-def _run(main_fn, argv: list[str]) -> str:
+def _run(main_fn: Callable[[], None], argv: list[str]) -> str:
     buf = io.StringIO()
     err = io.StringIO()
     old_argv = sys.argv
@@ -35,8 +44,10 @@ def pyfindrefs(target: str, project_root: str | None = None) -> str:
         target: Symbol in 'module:Symbol' or 'module:Class.method' format. E.g. 'src.models:User'
         project_root: Absolute path to project root (auto-detected from cwd if omitted)
     """
-    from .pyfindrefs import main
-    return _run(main, ["pyfindrefs", target] + (["--project-root", project_root] if project_root else []))
+    argv = ["pyfindrefs", target]
+    if project_root:
+        argv += ["--project-root", project_root]
+    return _run(_pyfindrefs_main, argv)
 
 
 @mcp.tool()
@@ -47,8 +58,10 @@ def pycallers(target: str, project_root: str | None = None) -> str:
         target: Symbol in 'module:function' or 'module:Class.method' format. E.g. 'src.api.views:create_user'
         project_root: Absolute path to project root (auto-detected from cwd if omitted)
     """
-    from .pycallers import main
-    return _run(main, ["pycallers", target] + (["--project-root", project_root] if project_root else []))
+    argv = ["pycallers", target]
+    if project_root:
+        argv += ["--project-root", project_root]
+    return _run(_pycallers_main, argv)
 
 
 @mcp.tool()
@@ -68,7 +81,6 @@ def pyfindunused(
         imports: Find imports never referenced in their file
         file_path: Restrict --params or --imports analysis to a specific file or directory
     """
-    from .pyfindunused import main
     argv = ["pyfindunused"]
     if dead_code:
         argv.append("--dead-code")
@@ -80,7 +92,7 @@ def pyfindunused(
         argv += ["--project-root", project_root]
     if file_path:
         argv.append(file_path)
-    return _run(main, argv)
+    return _run(_pyfindunused_main, argv)
 
 
 @mcp.tool()
@@ -98,13 +110,12 @@ def pymove(
         project_root: Absolute path to project root (auto-detected if omitted)
         dry_run: Preview changes without modifying any files
     """
-    from .pymove import main
     argv = ["pymove", source, destination]
     if project_root:
         argv += ["--project-root", project_root]
     if dry_run:
         argv.append("--dry-run")
-    return _run(main, argv)
+    return _run(_pymove_main, argv)
 
 
 @mcp.tool()
@@ -122,13 +133,12 @@ def pymovesymbol(
         project_root: Absolute path to project root (auto-detected if omitted)
         dry_run: Preview changes without modifying any files
     """
-    from .pymovesymbol import main
     argv = ["pymovesymbol", target, dest_module]
     if project_root:
         argv += ["--project-root", project_root]
     if dry_run:
         argv.append("--dry-run")
-    return _run(main, argv)
+    return _run(_pymovesymbol_main, argv)
 
 
 @mcp.tool()
@@ -146,13 +156,12 @@ def pyrename(
         project_root: Absolute path to project root (auto-detected if omitted)
         dry_run: Preview changes without modifying any files
     """
-    from .pyrename import main
     argv = ["pyrename", target, new_name]
     if project_root:
         argv += ["--project-root", project_root]
     if dry_run:
         argv.append("--dry-run")
-    return _run(main, argv)
+    return _run(_pyrename_main, argv)
 
 
 @mcp.tool()
@@ -178,7 +187,6 @@ def pysignature(
         project_root: Absolute path to project root (auto-detected if omitted)
         dry_run: Preview changes without modifying any files
     """
-    from .pysignature import main
     argv = ["pysignature", target]
     for item in (add or []):
         argv += ["--add"] + item.split()
@@ -194,4 +202,4 @@ def pysignature(
         argv += ["--project-root", project_root]
     if dry_run:
         argv.append("--dry-run")
-    return _run(main, argv)
+    return _run(_pysignature_main, argv)

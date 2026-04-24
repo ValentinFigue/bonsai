@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import ast
 import os
 from dataclasses import dataclass, field
@@ -16,7 +15,7 @@ def find_project_root(start: Path) -> Path:
     if current.is_file():
         current = current.parent
     for d in [current, *current.parents]:
-        if any((d / m).exists() for m in ["pyproject.toml", "setup.py", "setup.cfg", ".git"]):
+        if any((d / m).exists() for m in ["pyproject.toml", "setup.py", "setup.cfg", ".git", "src"]):
             return d
     return start.resolve().parent
 
@@ -48,7 +47,10 @@ def path_to_module(filepath: Path, root: Path) -> str | None:
 
 def module_to_path(module: str, root: Path) -> Path | None:
     parts = module.split(".")
-    fp = root / Path(*parts[:-1]) / (parts[-1] + ".py") if len(parts) > 1 else root / (parts[0] + ".py")
+    if len(parts) > 1:
+        fp = root / Path(*parts[:-1]) / (parts[-1] + ".py")
+    else:
+        fp = root / (parts[0] + ".py")
     if fp.exists():
         return fp
     pkg = root / Path(*parts) / "__init__.py"
@@ -90,7 +92,7 @@ def resolve_relative_import(
         parts = parts[:-1]
     if level > len(parts):
         return None
-    base_parts = parts[:len(parts) - (level - 1)] if level >= 1 else parts
+    base_parts = parts[: len(parts) - (level - 1)]
     if module:
         return ".".join(base_parts + module.split("."))
     return ".".join(base_parts)
@@ -122,6 +124,24 @@ class FileChanges:
                 last = result[edit.end_line][edit.end_col:]
                 result[edit.start_line:edit.end_line + 1] = [first + edit.new_text + last]
         return result
+
+
+def python_roots(root: Path) -> list[Path]:
+    """Return project root plus any immediate subdirectories that are Python packages."""
+    roots = [root]
+    try:
+        for child in root.iterdir():
+            markers = ["pyproject.toml", "setup.py", "setup.cfg"]
+            if child.is_dir() and any((child / m).exists() for m in markers):
+                roots.append(child)
+    except OSError:
+        pass
+    return roots
+
+
+def module_aliases_for_file(fpath: Path, roots: list[Path]) -> list[str]:
+    """Return all dotted module names for *fpath* across every Python root."""
+    return [m for r in roots if (m := path_to_module(fpath, r))]
 
 
 def apply_changes(changes: list[FileChanges], dry_run: bool = False) -> int:

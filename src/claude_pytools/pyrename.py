@@ -1,51 +1,28 @@
-#!/usr/bin/env python3
-"""
-pyrename — Scope-aware Python symbol renamer.
+"""pyrename — Scope-aware Python symbol renamer.
 
-Renames a function, class, method, or variable across the entire project
-using AST analysis. Won't rename unrelated local variables with the same name.
-
-Usage:
-    pyrename.py <module:symbol> <new_name> [--project-root <root>] [--dry-run]
-
-Examples:
-    pyrename.py src.models:User Account
-    pyrename.py src.api.views:create_user register_user
-    pyrename.py src.models:User.save persist         # rename method
-    pyrename.py src.utils:MAX_RETRIES MAX_RETRY_COUNT --dry-run
+Renames a function, class, method, or constant across the entire project
+using AST analysis. Does not rename unrelated local variables that happen
+to share the name — only the symbol at the specified module path.
 """
 
+import argparse
 import ast
 import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-if __package__:
-    from ._common import (
-        FileChanges,
-        FileEdit,
-        apply_changes,
-        collect_python_files,
-        find_project_root,
-        get_lines,
-        module_to_path,
-        parse_file,
-        resolve_relative_import,
-    )
-else:
-    sys.path.insert(0, str(Path(__file__).parent))
-    from _common import (  # noqa: E402
-        FileChanges,
-        FileEdit,
-        apply_changes,
-        collect_python_files,
-        find_project_root,
-        get_lines,
-        module_to_path,
-        parse_file,
-        resolve_relative_import,
-    )
+from ._common import (
+    FileChanges,
+    FileEdit,
+    apply_changes,
+    collect_python_files,
+    find_project_root,
+    get_lines,
+    module_to_path,
+    parse_file,
+    resolve_relative_import,
+)
 
 
 def parse_symbol_ref(ref: str) -> tuple[str, str, str | None]:
@@ -419,8 +396,7 @@ def do_rename(target_ref: str, new_name: str, root: Path, dry_run: bool) -> bool
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
-def main():
-    import argparse
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Scope-aware Python symbol renamer.",
         formatter_class=argparse.RawDescriptionHelpFormatter,

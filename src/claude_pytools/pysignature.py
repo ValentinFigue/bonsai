@@ -1,26 +1,10 @@
-#!/usr/bin/env python3
-"""
-pysignature — Change a Python function's signature and update all call sites.
+"""pysignature — Change a Python function's signature and update all call sites.
 
-Supports adding, removing, renaming parameters, changing defaults, and reordering.
-
-Usage:
-    pysignature.py <module:function>
-        [--add NAME [TYPE [DEFAULT]]]
-        [--remove NAME]
-        [--rename OLD NEW]
-        [--reorder N1 N2 ...]
-        [--set-default NAME VALUE [TYPE]]
-        [--project-root <root>] [--dry-run]
-
-Examples:
-    pysignature.py src.api:create_user --remove legacy_flag
-    pysignature.py src.api:create_user --add timeout int 30
-    pysignature.py src.api:create_user --rename user_id uid
-    pysignature.py src.api:create_user --reorder name email role
-    pysignature.py src.api:create_user --add timeout int 30 --remove legacy_flag --dry-run
+Supports adding, removing, renaming, and reordering parameters, and changing
+defaults. All call sites across the project are rewritten automatically.
 """
 
+import argparse
 import ast
 import io
 import sys
@@ -28,31 +12,17 @@ import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 
-if __package__:
-    from ._common import (
-        FileChanges,
-        FileEdit,
-        apply_changes,
-        collect_python_files,
-        find_project_root,
-        get_lines,
-        module_to_path,
-        parse_file,
-        resolve_relative_import,
-    )
-else:
-    sys.path.insert(0, str(Path(__file__).parent))
-    from _common import (  # noqa: E402
-        FileChanges,
-        FileEdit,
-        apply_changes,
-        collect_python_files,
-        find_project_root,
-        get_lines,
-        module_to_path,
-        parse_file,
-        resolve_relative_import,
-    )
+from ._common import (
+    FileChanges,
+    FileEdit,
+    apply_changes,
+    collect_python_files,
+    find_project_root,
+    get_lines,
+    module_to_path,
+    parse_file,
+    resolve_relative_import,
+)
 
 
 def parse_symbol_ref(ref: str) -> tuple[str, str, str | None]:
@@ -544,9 +514,7 @@ def do_signature(
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
-def main():
-    import argparse
-
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Change a Python function signature and update all call sites.",
         formatter_class=argparse.RawDescriptionHelpFormatter,

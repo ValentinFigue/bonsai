@@ -1,27 +1,17 @@
-#!/usr/bin/env python3
-"""
-pymove — AST-based safe Python module mover.
+"""pymove — AST-based safe Python module mover.
 
 Moves Python files/directories and rewrites all import references
 across the project so nothing breaks.
-
-Usage:
-    pymove.py <source> <destination> [--project-root <root>] [--dry-run]
-
-Examples:
-    pymove.py src/utils/helpers.py src/core/helpers.py
-    pymove.py src/utils/helpers.py src/core/            # keeps filename
-    pymove.py src/old_package/ src/new_package/          # move whole package
-    pymove.py src/utils/helpers.py src/core/helpers.py --dry-run
 """
 
 import argparse
 import ast
-import os
 import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from ._common import collect_python_files, find_project_root, path_to_module
 
 # ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -34,7 +24,7 @@ class ImportRef:
     original_text: str
     kind: str  # "import" | "from"
     module: str | None
-    names: list  # [(name, asname), ...]
+    names: list[tuple[str, str | None]]  # [(name, asname), ...]
     level: int   # relative import dots
 
 
@@ -43,59 +33,6 @@ class RewritePlan:
     filepath: Path
     original_lines: list[str] = field(default_factory=list)
     rewrites: list[tuple[int, int, str]] = field(default_factory=list)
-
-
-# ─── Path / Module Utilities ─────────────────────────────────────────────────
-
-def find_project_root(start: Path) -> Path:
-    current = start.resolve()
-    if current.is_file():
-        current = current.parent
-    for d in [current, *current.parents]:
-        markers = ["pyproject.toml", "setup.py", "setup.cfg", ".git", "src"]
-        if any((d / m).exists() for m in markers):
-            return d
-    return start.resolve().parent
-
-
-def path_to_module(filepath: Path, root: Path) -> str | None:
-    try:
-        rel = filepath.resolve().relative_to(root.resolve())
-    except ValueError:
-        return None
-
-    parts = list(rel.parts)
-    if not parts:
-        return None
-
-    if parts[-1].endswith(".py"):
-        parts[-1] = parts[-1][:-3]
-
-    if parts[-1] == "__init__":
-        parts = parts[:-1]
-
-    if not parts:
-        return None
-
-    return ".".join(parts)
-
-
-def collect_python_files(root: Path) -> list[Path]:
-    skip_dirs = {
-        ".git", ".hg", ".svn", "__pycache__", ".mypy_cache", ".pytest_cache",
-        ".tox", ".nox", ".venv", "venv", "env", ".env", "node_modules",
-        ".eggs", "build", "dist",
-    }
-    results = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [
-            d for d in dirnames
-            if d not in skip_dirs and not d.startswith(".")
-        ]
-        for f in filenames:
-            if f.endswith(".py"):
-                results.append(Path(dirpath) / f)
-    return results
 
 
 # ─── AST Import Extraction ───────────────────────────────────────────────────
@@ -528,7 +465,7 @@ def execute_move(
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Safely move Python modules with AST-based import rewriting.",
         formatter_class=argparse.RawDescriptionHelpFormatter,

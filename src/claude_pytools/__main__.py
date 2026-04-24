@@ -1,11 +1,11 @@
 import argparse
 import json
 import os
-import pathlib
 import sys
+from pathlib import Path
 
 
-def _install(settings_path: pathlib.Path, command: str) -> None:
+def _install(settings_path: Path, command: str) -> None:
     settings = {}
     if settings_path.exists():
         try:
@@ -44,14 +44,14 @@ def main() -> None:
     )
     parser.add_argument(
         "--settings",
-        default=str(pathlib.Path.home() / ".claude" / "settings.json"),
+        default=str(Path.home() / ".claude" / "settings.json"),
         help="Path to Claude Code settings.json (default: ~/.claude/settings.json)",
     )
 
     args = parser.parse_args()
 
     if args.install:
-        _install(pathlib.Path(args.settings), sys.executable)
+        _install(Path(args.settings), sys.executable)
         return
 
     from .server import mcp

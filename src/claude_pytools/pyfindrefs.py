@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Find all references to a Python symbol across the project using AST."""
 
 import argparse
@@ -8,27 +7,16 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-if __package__:
-    from ._common import (
-        collect_python_files,
-        find_project_root,
-        get_lines,
-        module_to_path,
-        parse_file,
-        path_to_module,
-        resolve_relative_import,
-    )
-else:
-    sys.path.insert(0, str(Path(__file__).parent))
-    from _common import (
-        collect_python_files,
-        find_project_root,
-        get_lines,
-        module_to_path,
-        parse_file,
-        path_to_module,
-        resolve_relative_import,
-    )
+from ._common import (
+    collect_python_files,
+    find_project_root,
+    get_lines,
+    module_aliases_for_file,
+    module_to_path,
+    parse_file,
+    python_roots,
+    resolve_relative_import,
+)
 
 _REF_PRIORITY = {
     "definition": 0,
@@ -181,28 +169,6 @@ def _scan_file(
     ]
 
 
-def _python_roots(root: Path) -> list[Path]:
-    """Find Python package roots: project root + immediate subdirs with pyproject.toml/setup.py."""
-    roots = [root]
-    try:
-        for child in root.iterdir():
-            if child.is_dir() and any((child / m).exists() for m in ["pyproject.toml", "setup.py", "setup.cfg"]):
-                roots.append(child)
-    except OSError:
-        pass
-    return roots
-
-
-def _module_aliases_for_file(fpath: Path, roots: list[Path]) -> list[str]:
-    """Compute all possible module names for a file (handles multiple Python roots)."""
-    names = []
-    for r in roots:
-        m = path_to_module(fpath, r)
-        if m:
-            names.append(m)
-    return names
-
-
 def _find_importers(
     symbol: str,
     module_name: str,
@@ -215,11 +181,10 @@ def _find_importers(
     module_imp: dict[Path, list[str]] = {}  # filepath → [module local names]
 
     # Build the full set of module names for the def file (handles multiple Python roots)
-    py_roots = _python_roots(root)
+    py_roots = python_roots(root)
     target_modules: set[str] = {module_name}
     if def_file:
-        for name in _module_aliases_for_file(def_file, py_roots):
-            target_modules.add(name)
+        target_modules.update(module_aliases_for_file(def_file, py_roots))
 
     for fpath in all_files:
         tree = parse_file(fpath)
@@ -312,15 +277,14 @@ def print_refs(refs: list[Ref]):
     print(f"\n{total} reference{'s' if total != 1 else ''} found.")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Find all references to a Python symbol.")
     parser.add_argument("target", help="module:Symbol or module:Class.method")
     parser.add_argument("--project-root", help="Project root directory")
     parser.add_argument("--json", action="store_true", help="Output as JSON array")
     args = parser.parse_args()
 
-    start = Path(args.project_root) if args.project_root else Path.cwd()
-    root = Path(args.project_root) if args.project_root else find_project_root(start)
+    root = Path(args.project_root) if args.project_root else find_project_root(Path.cwd())
 
     refs = find_refs(args.target, root)
 

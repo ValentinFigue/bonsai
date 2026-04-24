@@ -1,22 +1,9 @@
-#!/usr/bin/env python3
-"""
-pyfindunused — find unused Python symbols across the project.
+"""pyfindunused — find unused Python symbols across the project.
 
 Three detectors:
   --dead-code   Top-level functions/classes with no cross-module refs (default)
   --params      Function parameters never used in the body
   --imports     Imports never used within their file
-
-Usage:
-    pyfindunused.py [--dead-code] [--params] [--imports]
-                    [--project-root PATH] [--json]
-    pyfindunused.py --params backend/src/agent/graph.py
-
-Examples:
-    pyfindunused.py                     # run all three detectors
-    pyfindunused.py --dead-code         # only cross-module dead functions
-    pyfindunused.py --params            # only unused parameters
-    pyfindunused.py --imports src/      # unused imports under src/
 """
 
 import argparse
@@ -25,27 +12,15 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-if __package__:
-    from ._common import (
-        collect_python_files,
-        find_project_root,
-        get_lines,
-        parse_file,
-        path_to_module,
-        resolve_relative_import,
-    )
-else:
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent))
-    from _common import (
-        collect_python_files,
-        find_project_root,
-        get_lines,
-        parse_file,
-        path_to_module,
-        resolve_relative_import,
-    )
+from ._common import (
+    collect_python_files,
+    find_project_root,
+    get_lines,
+    module_aliases_for_file,
+    parse_file,
+    python_roots,
+    resolve_relative_import,
+)
 
 # Decorators implying framework registration — function is not dead.
 _FRAMEWORK_DECORATORS = {
@@ -82,29 +57,6 @@ class UnusedResult:
     kind: str    # dead_code | unused_param | unused_import
     name: str
     detail: str
-
-
-# ── helpers ───────────────────────────────────────────────────────────────────
-
-def _python_roots(root: Path) -> list[Path]:
-    roots = [root]
-    try:
-        for child in root.iterdir():
-            markers = ["pyproject.toml", "setup.py"]
-            if child.is_dir() and any((child / m).exists() for m in markers):
-                roots.append(child)
-    except OSError:
-        pass
-    return roots
-
-
-def _file_modules(fpath: Path, py_roots: list[Path]) -> list[str]:
-    names = []
-    for r in py_roots:
-        m = path_to_module(fpath, r)
-        if m:
-            names.append(m)
-    return names
 
 
 def _decorator_names(node) -> set[str]:
@@ -148,7 +100,7 @@ def _skip_for_dead(fpath: Path) -> bool:
 def find_dead_code(
     all_files: list[Path], root: Path
 ) -> list[UnusedResult]:
-    py_roots = _python_roots(root)
+    py_roots = python_roots(root)
     files = [f for f in all_files if not _skip_for_dead(f)]
 
     # Pass 1: collect top-level public definitions and __all__ per file
@@ -159,7 +111,7 @@ def find_dead_code(
         tree = parse_file(fpath)
         if not tree:
             continue
-        modules = _file_modules(fpath, py_roots)
+        modules = module_aliases_for_file(fpath, py_roots)
         if not modules:
             continue
 
@@ -224,7 +176,7 @@ def find_dead_code(
                         referenced.add(f"{resolved}:{a.name}")
 
         # Intra-file Name references to local definitions
-        modules = _file_modules(fpath, py_roots)
+        modules = module_aliases_for_file(fpath, py_roots)
         defs_here = local_def_names.get(fpath, set())
         if defs_here and modules:
             for node in ast.walk(tree):
@@ -234,7 +186,7 @@ def find_dead_code(
 
         # __all__ exports
         for exported in all_exports.get(fpath, set()):
-            for m in _file_modules(fpath, py_roots):
+            for m in module_aliases_for_file(fpath, py_roots):
                 referenced.add(f"{m}:{exported}")
 
     # Collect unreferenced, deduplicating by physical location
@@ -424,11 +376,7 @@ def main() -> None:
     run_params = args.params or not any_flag
     run_imports = args.imports or not any_flag
 
-    start = Path(args.project_root) if args.project_root else Path.cwd()
-    root = (
-        Path(args.project_root) if args.project_root
-        else find_project_root(start)
-    )
+    root = Path(args.project_root) if args.project_root else find_project_root(Path.cwd())
 
     if args.path:
         target = Path(args.path)

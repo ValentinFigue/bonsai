@@ -1,49 +1,26 @@
-#!/usr/bin/env python3
-"""
-pymovesymbol — Move a Python function or class to a different module.
+"""pymovesymbol — Move a Python function or class to a different module.
 
 Extracts the symbol from its source file, appends it to the destination,
 leaves a backward-compat comment in the original, and rewrites all import
 references across the project to point to the new location.
-
-Usage:
-    pymovesymbol.py <module:symbol> <dest_module> [--project-root <root>] [--dry-run]
-
-Examples:
-    pymovesymbol.py src.utils.helpers:format_date src.utils.dates
-    pymovesymbol.py src.models:User src.auth.models
-    pymovesymbol.py src.api.views:create_user src.api.users --dry-run
 """
 
+import argparse
 import ast
 import sys
 from pathlib import Path
 
-if __package__:
-    from ._common import (
-        FileChanges,
-        FileEdit,
-        apply_changes,
-        collect_python_files,
-        find_project_root,
-        get_lines,
-        module_to_path,
-        parse_file,
-        resolve_relative_import,
-    )
-else:
-    sys.path.insert(0, str(Path(__file__).parent))
-    from _common import (  # noqa: E402
-        FileChanges,
-        FileEdit,
-        apply_changes,
-        collect_python_files,
-        find_project_root,
-        get_lines,
-        module_to_path,
-        parse_file,
-        resolve_relative_import,
-    )
+from ._common import (
+    FileChanges,
+    FileEdit,
+    apply_changes,
+    collect_python_files,
+    find_project_root,
+    get_lines,
+    module_to_path,
+    parse_file,
+    resolve_relative_import,
+)
 
 
 def module_to_new_path(module: str, root: Path) -> Path:
@@ -291,8 +268,7 @@ def do_move_symbol(
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
-def main():
-    import argparse
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Move a Python function or class to a different module.",
         formatter_class=argparse.RawDescriptionHelpFormatter,

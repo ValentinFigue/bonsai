@@ -19,11 +19,11 @@ Examples:
     pyfindunused.py --imports src/      # unused imports under src/
 """
 
+import argparse
 import ast
 import json
-import argparse
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from dataclasses import dataclass, asdict
 
 if __package__:
     from ._common import (

@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 import ast
 import os
-from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
-
+from pathlib import Path
 
 SKIP_DIRS = {
     ".git", ".hg", ".svn", "__pycache__", ".mypy_cache", ".pytest_cache",
@@ -33,7 +31,7 @@ def collect_python_files(root: Path) -> list[Path]:
     return results
 
 
-def path_to_module(filepath: Path, root: Path) -> Optional[str]:
+def path_to_module(filepath: Path, root: Path) -> str | None:
     try:
         rel = filepath.resolve().relative_to(root.resolve())
     except ValueError:
@@ -48,7 +46,7 @@ def path_to_module(filepath: Path, root: Path) -> Optional[str]:
     return ".".join(parts) if parts else None
 
 
-def module_to_path(module: str, root: Path) -> Optional[Path]:
+def module_to_path(module: str, root: Path) -> Path | None:
     parts = module.split(".")
     fp = root / Path(*parts[:-1]) / (parts[-1] + ".py") if len(parts) > 1 else root / (parts[0] + ".py")
     if fp.exists():
@@ -57,14 +55,14 @@ def module_to_path(module: str, root: Path) -> Optional[Path]:
     return pkg if pkg.exists() else None
 
 
-def read_source(path: Path) -> Optional[str]:
+def read_source(path: Path) -> str | None:
     try:
         return path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         return None
 
 
-def parse_file(path: Path) -> Optional[ast.Module]:
+def parse_file(path: Path) -> ast.Module | None:
     source = read_source(path)
     if source is None:
         return None
@@ -74,7 +72,7 @@ def parse_file(path: Path) -> Optional[ast.Module]:
         return None
 
 
-def get_lines(path: Path) -> Optional[list[str]]:
+def get_lines(path: Path) -> list[str] | None:
     source = read_source(path)
     if source is None:
         return None
@@ -82,8 +80,8 @@ def get_lines(path: Path) -> Optional[list[str]]:
 
 
 def resolve_relative_import(
-    importing_file: Path, root: Path, level: int, module: Optional[str]
-) -> Optional[str]:
+    importing_file: Path, root: Path, level: int, module: str | None
+) -> str | None:
     file_module = path_to_module(importing_file, root)
     if file_module is None:
         return None

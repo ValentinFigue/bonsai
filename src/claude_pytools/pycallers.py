@@ -11,9 +11,9 @@ Examples:
     pycallers.py src.api.views:create_user --json
 """
 
-import sys
-import json
 import argparse
+import json
+import sys
 from dataclasses import asdict
 from pathlib import Path
 

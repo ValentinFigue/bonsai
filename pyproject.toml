@@ -41,3 +41,25 @@ claude-pytools = "claude_pytools.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/claude_pytools"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+# E501 ignored: MCP tool docstrings are intentionally long (Claude reads the first line)
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ty.environment]
+python = ".venv"
+python-version = "3.11"
+
+[tool.ty.rules]
+# False positives: else-branches of `if __package__:` use sys.path.insert for standalone CLI use;
+# ty can't follow runtime sys.path manipulation.
+unresolved-import = "ignore"

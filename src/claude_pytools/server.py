@@ -1,7 +1,6 @@
+import contextlib
 import io
 import sys
-import contextlib
-from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
@@ -36,7 +35,7 @@ def pyfindrefs(target: str, project_root: str | None = None) -> str:
         target: Symbol in 'module:Symbol' or 'module:Class.method' format. E.g. 'src.models:User'
         project_root: Absolute path to project root (auto-detected from cwd if omitted)
     """
-    from .pyfindrefs import find_refs, main
+    from .pyfindrefs import main
     return _run(main, ["pyfindrefs", target] + (["--project-root", project_root] if project_root else []))
 
 

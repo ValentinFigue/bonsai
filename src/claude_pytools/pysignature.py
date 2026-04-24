@@ -25,40 +25,37 @@ import ast
 import io
 import sys
 import tokenize
-from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional
+from pathlib import Path
 
 if __package__:
     from ._common import (
-        apply_changes,
-        collect_python_files,
         FileChanges,
         FileEdit,
+        apply_changes,
+        collect_python_files,
         find_project_root,
         get_lines,
         module_to_path,
         parse_file,
-        path_to_module,
         resolve_relative_import,
     )
 else:
     sys.path.insert(0, str(Path(__file__).parent))
     from _common import (  # noqa: E402
-        apply_changes,
-        collect_python_files,
         FileChanges,
         FileEdit,
+        apply_changes,
+        collect_python_files,
         find_project_root,
         get_lines,
         module_to_path,
         parse_file,
-        path_to_module,
         resolve_relative_import,
     )
 
 
-def parse_symbol_ref(ref: str) -> tuple[str, str, Optional[str]]:
+def parse_symbol_ref(ref: str) -> tuple[str, str, str | None]:
     if ":" not in ref:
         print(f"ERROR: Symbol reference must be 'module:symbol' (got '{ref}')", file=sys.stderr)
         sys.exit(1)
@@ -72,7 +69,7 @@ class TrackedImport:
     node: ast.stmt
     local_name: str
     is_module_import: bool
-    module_alias: Optional[str] = None
+    module_alias: str | None = None
 
 
 def find_imports_of_symbol(
@@ -114,8 +111,8 @@ def find_imports_of_symbol(
 @dataclass
 class ParamInfo:
     name: str
-    annotation: Optional[str] = None
-    default: Optional[str] = None
+    annotation: str | None = None
+    default: str | None = None
     kind: str = "regular"  # regular, keyword_only, positional_only, *args, **kwargs
 
 
@@ -123,14 +120,14 @@ class ParamInfo:
 class SignatureChange:
     action: str  # add, remove, rename, reorder, set_default
     param_name: str
-    new_name: Optional[str] = None
-    new_type: Optional[str] = None
-    new_default: Optional[str] = None
-    new_order: Optional[list[str]] = None
-    position: Optional[int] = None
+    new_name: str | None = None
+    new_type: str | None = None
+    new_default: str | None = None
+    new_order: list[str] | None = None
+    position: int | None = None
 
 
-def extract_params(func_node: ast.FunctionDef) -> list[ParamInfo]:
+def extract_params(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ParamInfo]:
     params = []
 
     # positional-only
@@ -247,8 +244,8 @@ def mutate_params(params: list[ParamInfo], changes: list[SignatureChange]) -> li
 
         elif ch.action == "rename":
             for p in result:
-                if p.name == ch.param_name:
-                    p.name = ch.new_name  # type: ignore[assignment]
+                if p.name == ch.param_name and ch.new_name is not None:
+                    p.name = ch.new_name
 
         elif ch.action == "set_default":
             for p in result:
@@ -267,7 +264,7 @@ def mutate_params(params: list[ParamInfo], changes: list[SignatureChange]) -> li
 
 
 class CallFinder(ast.NodeVisitor):
-    def __init__(self, func_name: str, is_module_import: bool, module_alias: Optional[str]):
+    def __init__(self, func_name: str, is_module_import: bool, module_alias: str | None):
         self.func_name = func_name
         self.is_module_import = is_module_import
         self.module_alias = module_alias
@@ -290,7 +287,7 @@ def find_matching_paren(
     lines: list[str],
     start_line: int,
     start_col: int,
-) -> Optional[tuple[int, int]]:
+) -> tuple[int, int] | None:
     slice_src = "".join(lines[start_line:])
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(slice_src).readline))
@@ -323,7 +320,7 @@ def rewrite_call(
     lines: list[str],
     old_params: list[ParamInfo],
     changes: list[SignatureChange],
-) -> Optional[FileEdit]:
+) -> FileEdit | None:
     if not call.args and not call.keywords:
         # Check if we need to add a non-default arg
         needs_add = any(
@@ -395,7 +392,9 @@ def rewrite_call(
     )
 
 
-def find_func_in_tree(tree: ast.Module, func_name: str, class_name: Optional[str] = None) -> Optional[ast.FunctionDef]:
+def find_func_in_tree(
+    tree: ast.Module, func_name: str, class_name: str | None = None
+) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
     if class_name:
         for node in ast.iter_child_nodes(tree):
             if isinstance(node, ast.ClassDef) and node.name == class_name:

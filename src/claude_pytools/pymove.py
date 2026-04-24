@@ -15,15 +15,13 @@ Examples:
     pymove.py src/utils/helpers.py src/core/helpers.py --dry-run
 """
 
+import argparse
 import ast
 import os
-import sys
 import shutil
-import argparse
-from pathlib import Path
+import sys
 from dataclasses import dataclass, field
-from typing import Optional
-
+from pathlib import Path
 
 # ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -35,7 +33,7 @@ class ImportRef:
     end_col_offset: int
     original_text: str
     kind: str  # "import" | "from"
-    module: Optional[str]
+    module: str | None
     names: list  # [(name, asname), ...]
     level: int   # relative import dots
 
@@ -60,7 +58,7 @@ def find_project_root(start: Path) -> Path:
     return start.resolve().parent
 
 
-def path_to_module(filepath: Path, root: Path) -> Optional[str]:
+def path_to_module(filepath: Path, root: Path) -> str | None:
     try:
         rel = filepath.resolve().relative_to(root.resolve())
     except ValueError:
@@ -153,7 +151,7 @@ def extract_imports(filepath: Path) -> list[ImportRef]:
 
 # ─── Resolve Relative Imports ────────────────────────────────────────────────
 
-def resolve_relative_import(importing_file: Path, root: Path, level: int, module: Optional[str]) -> Optional[str]:
+def resolve_relative_import(importing_file: Path, root: Path, level: int, module: str | None) -> str | None:
     file_module = path_to_module(importing_file, root)
     if file_module is None:
         return None
@@ -184,7 +182,7 @@ def needs_rewrite(
     importing_file: Path,
     root: Path,
     old_module: str,
-    old_package: Optional[str],
+    old_package: str | None,
 ) -> bool:
     if imp.kind == "import":
         for name, _ in imp.names:
@@ -223,8 +221,8 @@ def rewrite_import_line(
     root: Path,
     old_module: str,
     new_module: str,
-    old_package: Optional[str],
-    new_package: Optional[str],
+    old_package: str | None,
+    new_package: str | None,
 ) -> str:
     def replace_module_prefix(m: str) -> str:
         if m == old_module:
@@ -304,7 +302,7 @@ def rewrite_internal_imports(
     root: Path,
     old_module: str,
     new_module: str,
-) -> Optional[list[str]]:
+) -> list[str] | None:
     try:
         source = filepath.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
@@ -395,6 +393,10 @@ def plan_move(
         print(f"ERROR: Could not determine module path for {src}", file=sys.stderr)
         return []
 
+    if not new_module:
+        print(f"ERROR: Could not determine module path for {dst}", file=sys.stderr)
+        return []
+
     py_files = collect_python_files(root)
     plans = []
 
@@ -436,7 +438,7 @@ def apply_plan(plan: RewritePlan) -> None:
 def execute_move(
     src: Path,
     dst: Path,
-    root: Optional[Path] = None,
+    root: Path | None = None,
     dry_run: bool = False,
 ) -> bool:
     src = Path(src).resolve()
@@ -464,7 +466,7 @@ def execute_move(
     try:
         rel = actual_dst.relative_to(root)
     except ValueError:
-        print(f"ERROR: Destination is outside project root.", file=sys.stderr)
+        print("ERROR: Destination is outside project root.", file=sys.stderr)
         return False
     parts = list(rel.parts)
     if parts[-1].endswith(".py"):
@@ -485,7 +487,7 @@ def execute_move(
     print(f"  Files affected:  {affected_files}")
     print(f"  Import rewrites: {total_changes}")
     if internal_lines is not None:
-        print(f"  Internal imports also need updating")
+        print("  Internal imports also need updating")
     print()
 
     if dry_run:

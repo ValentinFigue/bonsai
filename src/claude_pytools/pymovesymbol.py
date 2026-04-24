@@ -18,14 +18,13 @@ Examples:
 import ast
 import sys
 from pathlib import Path
-from typing import Optional
 
 if __package__:
     from ._common import (
-        apply_changes,
-        collect_python_files,
         FileChanges,
         FileEdit,
+        apply_changes,
+        collect_python_files,
         find_project_root,
         get_lines,
         module_to_path,
@@ -35,10 +34,10 @@ if __package__:
 else:
     sys.path.insert(0, str(Path(__file__).parent))
     from _common import (  # noqa: E402
-        apply_changes,
-        collect_python_files,
         FileChanges,
         FileEdit,
+        apply_changes,
+        collect_python_files,
         find_project_root,
         get_lines,
         module_to_path,
@@ -65,7 +64,7 @@ def parse_symbol_ref(ref: str) -> tuple[str, str]:
 
 # ─── Move-Symbol Logic ───────────────────────────────────────────────────────
 
-def extract_symbol(filepath: Path, symbol_name: str) -> Optional[tuple[str, int, int]]:
+def extract_symbol(filepath: Path, symbol_name: str) -> tuple[str, int, int] | None:
     """Extract a symbol's source text from a file.
 
     Returns (source_text, start_line_0idx, end_line_0idx).
@@ -128,6 +127,7 @@ def do_move_symbol(
     create_dst = dst_path is None or not dst_path.exists()
     if create_dst:
         dst_path = module_to_new_path(dest_module, root)
+    assert dst_path is not None
 
     extraction = extract_symbol(src_path, symbol_name)
     if extraction is None:
@@ -176,8 +176,6 @@ def do_move_symbol(
         dst_lines = get_lines(dst_path)
         if dst_lines is None:
             return False
-        # Strip trailing newlines from existing file to avoid double blank lines
-        last_content = "".join(dst_lines).rstrip("\n")
         append_text = "\n\n\n" + symbol_source
         if not symbol_source.endswith("\n"):
             append_text += "\n"
@@ -282,7 +280,7 @@ def do_move_symbol(
     count = apply_changes(all_changes, dry_run=dry_run)
 
     if dry_run:
-        print(f"\n[DRY RUN] No files modified.")
+        print("\n[DRY RUN] No files modified.")
     else:
         print(f"\n  Done! Modified {count} file(s).")
         print(f"  Note: Check if {dst_path.name} needs the imports that {symbol_name} depends on.")

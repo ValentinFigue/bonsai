@@ -1,33 +1,32 @@
 #!/usr/bin/env python3
 """Find all references to a Python symbol across the project using AST."""
 
-import ast
-import sys
-import json
 import argparse
+import ast
+import json
+import sys
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from dataclasses import dataclass, asdict
-from typing import Optional
 
 if __package__:
     from ._common import (
-        find_project_root,
         collect_python_files,
-        module_to_path,
-        path_to_module,
-        parse_file,
+        find_project_root,
         get_lines,
+        module_to_path,
+        parse_file,
+        path_to_module,
         resolve_relative_import,
     )
 else:
     sys.path.insert(0, str(Path(__file__).parent))
     from _common import (
-        find_project_root,
         collect_python_files,
-        module_to_path,
-        path_to_module,
-        parse_file,
+        find_project_root,
         get_lines,
+        module_to_path,
+        parse_file,
+        path_to_module,
         resolve_relative_import,
     )
 
@@ -64,7 +63,7 @@ def _build_parent_map(tree: ast.AST) -> dict:
     return pm
 
 
-def _classify_name(node: ast.Name, pm: dict) -> Optional[str]:
+def _classify_name(node: ast.Name, pm: dict) -> str | None:
     parent = pm.get(id(node))
     gp = pm.get(id(parent)) if parent else None
 
@@ -122,7 +121,7 @@ def _scan_file(
     direct_aliases: list[str],
     module_aliases: list[str],
     symbol: str,
-    method: Optional[str],
+    method: str | None,
     is_def_file: bool,
 ) -> list[Ref]:
     tree = parse_file(fpath)
@@ -207,7 +206,7 @@ def _module_aliases_for_file(fpath: Path, roots: list[Path]) -> list[str]:
 def _find_importers(
     symbol: str,
     module_name: str,
-    def_file: Optional[Path],
+    def_file: Path | None,
     all_files: list[Path],
     root: Path,
 ) -> tuple[dict[Path, str], dict[Path, list[str]]]:
@@ -256,7 +255,7 @@ def find_refs(target: str, project_root: Path) -> list[Ref]:
         sys.exit(1)
 
     module_name, _, sym = target.rpartition(":")
-    method: Optional[str] = None
+    method: str | None = None
     symbol = sym
     if "." in sym:
         symbol, _, method = sym.partition(".")

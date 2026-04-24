@@ -18,42 +18,37 @@ Examples:
 import ast
 import re
 import sys
-from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional
+from pathlib import Path
 
 if __package__:
     from ._common import (
-        apply_changes,
-        collect_python_files,
         FileChanges,
         FileEdit,
+        apply_changes,
+        collect_python_files,
         find_project_root,
         get_lines,
         module_to_path,
         parse_file,
-        path_to_module,
-        read_source,
         resolve_relative_import,
     )
 else:
     sys.path.insert(0, str(Path(__file__).parent))
     from _common import (  # noqa: E402
-        apply_changes,
-        collect_python_files,
         FileChanges,
         FileEdit,
+        apply_changes,
+        collect_python_files,
         find_project_root,
         get_lines,
         module_to_path,
         parse_file,
-        path_to_module,
-        read_source,
         resolve_relative_import,
     )
 
 
-def parse_symbol_ref(ref: str) -> tuple[str, str, Optional[str]]:
+def parse_symbol_ref(ref: str) -> tuple[str, str, str | None]:
     if ":" not in ref:
         print(f"ERROR: Symbol reference must be 'module:symbol' (got '{ref}')", file=sys.stderr)
         sys.exit(1)
@@ -67,7 +62,7 @@ class TrackedImport:
     node: ast.stmt
     local_name: str
     is_module_import: bool
-    module_alias: Optional[str] = None
+    module_alias: str | None = None
     lineno: int = 0
     end_lineno: int = 0
 
@@ -131,9 +126,9 @@ class RenameVisitor(ast.NodeVisitor):
         target_name: str,
         new_name: str,
         is_module_import: bool,
-        module_alias: Optional[str],
+        module_alias: str | None,
         is_definition_file: bool,
-        target_method: Optional[str] = None,
+        target_method: str | None = None,
     ):
         self.target_name = target_name
         self.new_name = new_name
@@ -324,7 +319,7 @@ def rename_import_name(
                     start_col=col,
                     end_col=col + len(old_name),
                     new_text=new_name,
-                    description=f"Rename in import",
+                    description="Rename in import",
                 ))
                 break
     return edits

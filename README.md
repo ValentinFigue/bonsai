@@ -1,7 +1,7 @@
-# claude-pytools
+# bonsai
 
-[![PyPI version](https://img.shields.io/pypi/v/claude-pytools)](https://pypi.org/project/claude-pytools/)
-[![Python 3.10+](https://img.shields.io/pypi/pyversions/claude-pytools)](https://pypi.org/project/claude-pytools/)
+[![PyPI version](https://img.shields.io/pypi/v/bonsai)](https://pypi.org/project/bonsai/)
+[![Python 3.10+](https://img.shields.io/pypi/pyversions/bonsai)](https://pypi.org/project/bonsai/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 AST-based Python refactoring tools for Claude Code. Find symbol references, detect dead code, rename identifiers, move files and symbols, and update function signatures — driven by static analysis, with no language server or type-checking daemon required.
@@ -9,7 +9,7 @@ AST-based Python refactoring tools for Claude Code. Find symbol references, dete
 ## Install
 
 ```bash
-pip install claude-pytools && python -m claude_pytools --install
+pip install bonsai && python -m bonsai --install
 ```
 
 Restart Claude Code. All 7 tools are immediately available.
@@ -17,12 +17,12 @@ Restart Claude Code. All 7 tools are immediately available.
 **Zero-install alternative** (requires `uv`, after PyPI publish):
 
 ```bash
-uvx claude-pytools --install
+uvx bonsai --install
 ```
 
 ## How it works
 
-`claude-pytools` runs as an MCP server that Claude Code connects to over stdio. When you describe a refactoring in natural language, Claude picks the right tool, calls it with the correct arguments, and shows you the result. No slash commands, no Bash permissions needed for the tools.
+`bonsai` runs as an MCP server that Claude Code connects to over stdio. When you describe a refactoring in natural language, Claude picks the right tool, calls it with the correct arguments, and shows you the result. No slash commands, no Bash permissions needed for the tools.
 
 The tools use Python's `ast` module to parse source files directly — the only runtime dependency is `mcp[cli]`. They work on any Python 3.10+ project regardless of framework.
 
@@ -93,38 +93,47 @@ All mutating tools (`pymove`, `pymovesymbol`, `pyrename`, `pysignature`) support
 
 ## Configuration
 
-Add a `[tool.claude-pytools]` section to your project's `pyproject.toml` to extend the built-in defaults for dead-code detection.
+Add a `[tool.bonsai]` section to your project's `pyproject.toml` to customise dead-code detection.
+
+Each setting has two variants:
+
+- **`extra_*`** — merged with the built-in defaults (additive)
+- **base key** — replaces the built-in defaults entirely
 
 ```toml
-[tool.claude-pytools]
-# Decorators that mark a function as framework-registered (won't be flagged as dead code).
-# Merged with the built-in list: get, post, route, task, fixture, classmethod, staticmethod, …
+[tool.bonsai]
+# Extend the built-in decorator list (get, post, route, task, fixture, classmethod, …)
 dead_code_extra_decorators = ["api_view", "login_required", "permission_classes"]
 
-# Function names implicitly called by a framework or runtime (won't be flagged as dead code).
-# Merged with the built-in list: main, handler, lambda_handler, setUp, upgrade, …
+# Replace the built-in decorator list entirely
+# dead_code_decorators = ["route", "task"]
+
+# Extend the built-in entry-point list (main, handler, lambda_handler, setUp, upgrade, …)
 dead_code_extra_entry_points = ["run", "execute", "on_ready"]
 
-# Additional directory names to skip during dead-code scanning.
-# Merged with the built-in list: migrations, tests, test, alembic.
-dead_code_extra_skip_dirs = ["fixtures", "scripts", "docs"]
-```
+# Replace the built-in entry-point list entirely
+# dead_code_entry_points = ["main", "handler"]
 
-All three keys are additive — they extend the built-in defaults rather than replacing them.
+# Extend the built-in skip-dirs list (migrations, tests, test, alembic)
+dead_code_extra_skip_dirs = ["fixtures", "scripts"]
+
+# Replace the built-in skip-dirs list entirely (e.g. to scan test files)
+# dead_code_skip_dirs = ["migrations", "alembic"]
+```
 
 ## Development
 
 ```bash
-git clone https://github.com/valentinfigue/claude-pytools
-cd claude-pytools
+git clone https://github.com/valentinfigue/bonsai
+cd bonsai
 pip install -e .
 ```
 
 Run the MCP server directly:
 
 ```bash
-python -m claude_pytools           # start the stdio MCP server
-python -m claude_pytools --install # write config to ~/.claude/settings.json
+python -m bonsai           # start the stdio MCP server
+python -m bonsai --install # write config to ~/.claude/settings.json
 ```
 
 Publish a new version to PyPI:

@@ -1,5 +1,5 @@
 {
-  "name": "claude-pytools",
+  "name": "bonsai",
   "description": "AST-based Python refactoring tools for Claude Code: find references, detect dead code, rename symbols, move files/symbols, and change function signatures — all without a language server.",
   "version": "0.1.0",
   "author": {

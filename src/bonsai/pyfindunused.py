@@ -102,9 +102,9 @@ def _skip_for_dead(fpath: Path, skip_dirs: frozenset[str]) -> bool:
 def find_dead_code(
     all_files: list[Path], root: Path, config: PyToolsConfig = PyToolsConfig()
 ) -> list[UnusedResult]:
-    effective_decorators = _FRAMEWORK_DECORATORS | config.dead_code_extra_decorators
-    effective_entry_points = _ENTRY_POINTS | config.dead_code_extra_entry_points
-    effective_skip = _DEAD_SKIP | config.dead_code_extra_skip_dirs
+    effective_decorators = (config.dead_code_decorators if config.dead_code_decorators is not None else _FRAMEWORK_DECORATORS) | config.dead_code_extra_decorators
+    effective_entry_points = (config.dead_code_entry_points if config.dead_code_entry_points is not None else _ENTRY_POINTS) | config.dead_code_extra_entry_points
+    effective_skip = (config.dead_code_skip_dirs if config.dead_code_skip_dirs is not None else _DEAD_SKIP) | config.dead_code_extra_skip_dirs
 
     py_roots = python_roots(root)
     files = [f for f in all_files if not _skip_for_dead(f, effective_skip)]

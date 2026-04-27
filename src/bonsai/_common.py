@@ -21,7 +21,7 @@ def _opt_frozenset(section: dict, key: str) -> frozenset[str] | None:
 
 
 def load_config(root: Path) -> PyToolsConfig:
-    """Read [tool.claude-pytools] from the project's pyproject.toml, if present."""
+    """Read [tool.bonsai] from the project's pyproject.toml, if present."""
     pyproject = root / "pyproject.toml"
     if not pyproject.exists():
         return PyToolsConfig()
@@ -37,7 +37,7 @@ def load_config(root: Path) -> PyToolsConfig:
             data = tomllib.load(f)
     except Exception:
         return PyToolsConfig()
-    section = data.get("tool", {}).get("claude-pytools", {})
+    section = data.get("tool", {}).get("bonsai", {})
     return PyToolsConfig(
         dead_code_decorators=_opt_frozenset(section, "dead_code_decorators"),
         dead_code_entry_points=_opt_frozenset(section, "dead_code_entry_points"),

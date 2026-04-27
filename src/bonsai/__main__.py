@@ -13,34 +13,34 @@ def _install(settings_path: Path, command: str) -> None:
         except json.JSONDecodeError:
             print(f"WARNING: Could not parse {settings_path}, creating fresh config.", file=sys.stderr)
 
-    settings.setdefault("mcpServers", {})["pytools"] = {
+    settings.setdefault("mcpServers", {})["bonsai"] = {
         "type": "stdio",
         "command": command,
-        "args": ["-m", "claude_pytools"],
+        "args": ["-m", "bonsai"],
     }
 
     allow = settings.setdefault("permissions", {}).setdefault("allow", [])
-    if "mcp__pytools__*" not in allow:
-        allow.append("mcp__pytools__*")
+    if "mcp__bonsai__*" not in allow:
+        allow.append("mcp__bonsai__*")
 
     tmp = settings_path.with_suffix(".tmp")
     tmp.write_text(json.dumps(settings, indent=2) + "\n")
     os.replace(tmp, settings_path)
 
-    print(f"Installed. Added 'pytools' MCP server to {settings_path}")
-    print("Restart Claude Code to load the pytools MCP server.")
+    print(f"Installed. Added 'bonsai' MCP server to {settings_path}")
+    print("Restart Claude Code to load the bonsai MCP server.")
     print()
     print("Available tools: pyfindrefs, pycallers, pyfindunused, pymove, pymovesymbol, pyrename, pysignature")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="claude-pytools: AST-based Python refactoring tools for Claude Code",
+        description="bonsai: AST-based Python refactoring tools for Claude Code",
     )
     parser.add_argument(
         "--install",
         action="store_true",
-        help="Add pytools MCP server to ~/.claude/settings.json and exit",
+        help="Add bonsai MCP server to ~/.claude/settings.json and exit",
     )
     parser.add_argument(
         "--settings",

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "claude-pytools"
+name = "bonsai"
 version = "0.1.0"
 description = "AST-based Python refactoring tools as a Claude Code MCP plugin"
 readme = "README.md"
@@ -35,15 +35,15 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/valentinfigue/claude-pytools"
-Repository = "https://github.com/valentinfigue/claude-pytools"
-Issues = "https://github.com/valentinfigue/claude-pytools/issues"
+Homepage = "https://github.com/valentinfigue/bonsai"
+Repository = "https://github.com/valentinfigue/bonsai"
+Issues = "https://github.com/valentinfigue/bonsai/issues"
 
 [project.scripts]
-claude-pytools = "claude_pytools.__main__:main"
+bonsai = "bonsai.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/claude_pytools"]
+packages = ["src/bonsai"]
 
 [tool.ruff]
 line-length = 120

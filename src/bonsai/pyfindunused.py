@@ -26,26 +26,51 @@ from ._common import (
 
 # Decorators implying framework registration — function is not dead.
 _FRAMEWORK_DECORATORS = {
-    "get", "post", "put", "delete", "patch",
-    "head", "options", "websocket", "route",
-    "task", "shared_task", "periodic_task",
-    "fixture", "mark",
-    "command", "group",
-    "on_startup", "on_shutdown", "on_event",
-    "receiver", "signal",
-    "classmethod", "staticmethod",
+    "get",
+    "post",
+    "put",
+    "delete",
+    "patch",
+    "head",
+    "options",
+    "websocket",
+    "route",
+    "task",
+    "shared_task",
+    "periodic_task",
+    "fixture",
+    "mark",
+    "command",
+    "group",
+    "on_startup",
+    "on_shutdown",
+    "on_event",
+    "receiver",
+    "signal",
+    "classmethod",
+    "staticmethod",
     "overload",
 }
 
 # Names that are implicitly called by a framework or runtime.
 _ENTRY_POINTS = {
-    "main", "cli", "app", "create_app", "application",
-    "handler", "lambda_handler",
-    "upgrade", "downgrade",               # Alembic
-    "run_migrations_online", "run_migrations_offline",
-    "setUp", "tearDown",                  # unittest
-    "setUpClass", "tearDownClass",
-    "startup", "shutdown",
+    "main",
+    "cli",
+    "app",
+    "create_app",
+    "application",
+    "handler",
+    "lambda_handler",
+    "upgrade",
+    "downgrade",  # Alembic
+    "run_migrations_online",
+    "run_migrations_offline",
+    "setUp",
+    "tearDown",  # unittest
+    "setUpClass",
+    "tearDownClass",
+    "startup",
+    "shutdown",
 }
 
 # Directory names to skip for dead-code detection.
@@ -56,12 +81,15 @@ _DEAD_SKIP: frozenset[str] = frozenset({"migrations", "tests", "test", "alembic"
 class UnusedResult:
     filepath: str
     line: int
-    kind: str    # dead_code | unused_param | unused_import
+    kind: str  # dead_code | unused_param | unused_import
     name: str
     detail: str
 
 
-def _decorator_names(node) -> set[str]:
+def _decorator_names(
+    node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
+) -> set[str]:
+    """Return the set of bare decorator names applied to *node*."""
     names: set[str] = set()
     for dec in node.decorator_list:
         if isinstance(dec, ast.Name):
@@ -77,7 +105,8 @@ def _decorator_names(node) -> set[str]:
     return names
 
 
-def _names_in_stmts(stmts: list) -> set[str]:
+def _names_in_stmts(stmts: list[ast.stmt]) -> set[str]:
+    """Return all ``ast.Name`` identifiers that appear anywhere inside *stmts*."""
     names: set[str] = set()
     for stmt in stmts:
         for node in ast.walk(stmt):
@@ -87,6 +116,7 @@ def _names_in_stmts(stmts: list) -> set[str]:
 
 
 def _snippet(fpath: Path, lineno: int) -> str:
+    """Return the stripped source line at *lineno* (1-based) of *fpath*, or ``""``."""
     lines = get_lines(fpath)
     if lines and 1 <= lineno <= len(lines):
         return lines[lineno - 1].strip()
@@ -94,17 +124,43 @@ def _snippet(fpath: Path, lineno: int) -> str:
 
 
 def _skip_for_dead(fpath: Path, skip_dirs: frozenset[str]) -> bool:
+    """Return ``True`` if any path component of *fpath* is in *skip_dirs*."""
     return any(part in skip_dirs for part in fpath.parts)
 
 
 # ── dead code ─────────────────────────────────────────────────────────────────
 
+
 def find_dead_code(
-    all_files: list[Path], root: Path, config: PyToolsConfig = PyToolsConfig()
+    all_files: list[Path],
+    root: Path,
+    config: PyToolsConfig | None = None,
 ) -> list[UnusedResult]:
-    effective_decorators = (config.dead_code_decorators if config.dead_code_decorators is not None else _FRAMEWORK_DECORATORS) | config.dead_code_extra_decorators
-    effective_entry_points = (config.dead_code_entry_points if config.dead_code_entry_points is not None else _ENTRY_POINTS) | config.dead_code_extra_entry_points
-    effective_skip = (config.dead_code_skip_dirs if config.dead_code_skip_dirs is not None else _DEAD_SKIP) | config.dead_code_extra_skip_dirs
+    """Find top-level public functions and classes with no cross-module references.
+
+    Uses a two-pass approach: pass 1 collects definitions; pass 2 scans all
+    files for imports or intra-file name references to those definitions.
+
+    Args:
+        all_files: Full list of ``.py`` files to analyse.
+        root: Project root (used to compute module names).
+        config: Optional project configuration; defaults to :class:`PyToolsConfig`.
+
+    Returns:
+        List of :class:`UnusedResult` entries for unreferenced symbols.
+    """
+    if config is None:
+        config = PyToolsConfig()
+
+    effective_decorators = (
+        config.dead_code_decorators if config.dead_code_decorators is not None else _FRAMEWORK_DECORATORS
+    ) | config.dead_code_extra_decorators
+    effective_entry_points = (
+        config.dead_code_entry_points if config.dead_code_entry_points is not None else _ENTRY_POINTS
+    ) | config.dead_code_extra_entry_points
+    effective_skip = (
+        config.dead_code_skip_dirs if config.dead_code_skip_dirs is not None else _DEAD_SKIP
+    ) | config.dead_code_extra_skip_dirs
 
     py_roots = python_roots(root)
     files = [f for f in all_files if not _skip_for_dead(f, effective_skip)]
@@ -129,10 +185,7 @@ def find_dead_code(
                         val = node.value
                         if isinstance(val, (ast.List, ast.Tuple)):
                             for elt in val.elts:
-                                if (
-                                    isinstance(elt, ast.Constant)
-                                    and isinstance(elt.value, str)
-                                ):
+                                if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
                                     exports.add(elt.value)
         all_exports[fpath] = exports
 
@@ -170,9 +223,7 @@ def find_dead_code(
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 if node.level > 0:
-                    resolved = resolve_relative_import(
-                        fpath, root, node.level, node.module
-                    )
+                    resolved = resolve_relative_import(fpath, root, node.level, node.module)
                 else:
                     resolved = node.module
                 if not resolved:
@@ -198,9 +249,7 @@ def find_dead_code(
     # Collect unreferenced, deduplicating by physical location
     seen: set[tuple[Path, int]] = set()
     results: list[UnusedResult] = []
-    for key, (fpath, lineno, name) in sorted(
-        defs.items(), key=lambda x: (str(x[1][0]), x[1][1])
-    ):
+    for key, (fpath, lineno, name) in sorted(defs.items(), key=lambda x: (str(x[1][0]), x[1][1])):
         loc = (fpath, lineno)
         if loc in seen:
             continue
@@ -208,21 +257,33 @@ def find_dead_code(
         if any(k in referenced for k in variants):
             continue
         seen.add(loc)
-        results.append(UnusedResult(
-            filepath=str(fpath.relative_to(root)),
-            line=lineno,
-            kind="dead_code",
-            name=name,
-            detail=_snippet(fpath, lineno),
-        ))
+        results.append(
+            UnusedResult(
+                filepath=str(fpath.relative_to(root)),
+                line=lineno,
+                kind="dead_code",
+                name=name,
+                detail=_snippet(fpath, lineno),
+            )
+        )
     return results
 
 
 # ── unused parameters ─────────────────────────────────────────────────────────
 
-def find_unused_params(
-    all_files: list[Path], root: Path
-) -> list[UnusedResult]:
+
+def find_unused_params(all_files: list[Path], root: Path) -> list[UnusedResult]:
+    """Find function parameters that are never referenced in the function body.
+
+    Skips ``self``, ``cls``, and underscore-prefixed parameters.
+
+    Args:
+        all_files: ``.py`` files to scan.
+        root: Project root (used to compute relative file paths for output).
+
+    Returns:
+        List of :class:`UnusedResult` entries with ``kind="unused_param"``.
+    """
     results: list[UnusedResult] = []
 
     for fpath in all_files:
@@ -231,9 +292,7 @@ def find_unused_params(
             continue
 
         for node in ast.walk(tree):
-            if not isinstance(
-                node, (ast.FunctionDef, ast.AsyncFunctionDef)
-            ):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
 
             args = node.args
@@ -252,22 +311,35 @@ def find_unused_params(
 
             for param_name, param_line in params:
                 if param_name not in used:
-                    results.append(UnusedResult(
-                        filepath=str(fpath.relative_to(root)),
-                        line=param_line,
-                        kind="unused_param",
-                        name=param_name,
-                        detail=f"in {node.name}() — {fn_snippet}",
-                    ))
+                    results.append(
+                        UnusedResult(
+                            filepath=str(fpath.relative_to(root)),
+                            line=param_line,
+                            kind="unused_param",
+                            name=param_name,
+                            detail=f"in {node.name}() — {fn_snippet}",
+                        )
+                    )
 
     return results
 
 
 # ── unused imports ────────────────────────────────────────────────────────────
 
-def find_unused_imports(
-    all_files: list[Path], root: Path
-) -> list[UnusedResult]:
+
+def find_unused_imports(all_files: list[Path], root: Path) -> list[UnusedResult]:
+    """Find imports in each file that are never referenced outside the import block.
+
+    Excludes imports inside ``TYPE_CHECKING`` blocks and ``__future__`` imports.
+    Handles string annotations by scanning ``ast.Constant`` nodes.
+
+    Args:
+        all_files: ``.py`` files to scan.
+        root: Project root (used to compute relative file paths for output).
+
+    Returns:
+        List of :class:`UnusedResult` entries with ``kind="unused_import"``.
+    """
     results: list[UnusedResult] = []
 
     for fpath in all_files:
@@ -281,11 +353,8 @@ def find_unused_imports(
             if not isinstance(node, ast.If):
                 continue
             test = node.test
-            is_tc = (
-                isinstance(test, ast.Name) and test.id == "TYPE_CHECKING"
-            ) or (
-                isinstance(test, ast.Attribute)
-                and test.attr == "TYPE_CHECKING"
+            is_tc = (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (
+                isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
             )
             if not is_tc:
                 continue
@@ -304,16 +373,12 @@ def find_unused_imports(
                         continue
                     local = a.asname or a.name
                     if local not in type_checking_names:
-                        imports.append(
-                            (local, node.lineno, _snippet(fpath, node.lineno))
-                        )
+                        imports.append((local, node.lineno, _snippet(fpath, node.lineno)))
             elif isinstance(node, ast.Import):
                 for a in node.names:
                     local = a.asname or a.name
                     if local not in type_checking_names:
-                        imports.append(
-                            (local, node.lineno, _snippet(fpath, node.lineno))
-                        )
+                        imports.append((local, node.lineno, _snippet(fpath, node.lineno)))
 
         if not imports:
             continue
@@ -328,20 +393,24 @@ def find_unused_imports(
 
         for local_name, lineno, snippet in imports:
             if local_name not in used:
-                results.append(UnusedResult(
-                    filepath=str(fpath.relative_to(root)),
-                    line=lineno,
-                    kind="unused_import",
-                    name=local_name,
-                    detail=snippet,
-                ))
+                results.append(
+                    UnusedResult(
+                        filepath=str(fpath.relative_to(root)),
+                        line=lineno,
+                        kind="unused_import",
+                        name=local_name,
+                        detail=snippet,
+                    )
+                )
 
     return results
 
 
 # ── output ────────────────────────────────────────────────────────────────────
 
+
 def print_results(results: list[UnusedResult], header: str) -> None:
+    """Print *results* under *header* in a tabular format, or report none found."""
     if not results:
         print(f"{header}: none found.")
         return
@@ -353,24 +422,28 @@ def print_results(results: list[UnusedResult], header: str) -> None:
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Find unused Python symbols."
-    )
+    """CLI entry point: parse arguments and invoke the selected detectors."""
+    parser = argparse.ArgumentParser(description="Find unused Python symbols.")
     parser.add_argument(
-        "path", nargs="?",
+        "path",
+        nargs="?",
         help="Limit to a specific file or directory",
     )
     parser.add_argument(
-        "--dead-code", action="store_true",
+        "--dead-code",
+        action="store_true",
         help="Find unused top-level functions/classes",
     )
     parser.add_argument(
-        "--params", action="store_true",
+        "--params",
+        action="store_true",
         help="Find unused function parameters",
     )
     parser.add_argument(
-        "--imports", action="store_true",
+        "--imports",
+        action="store_true",
         help="Find unused imports within files",
     )
     parser.add_argument("--project-root", help="Project root directory")

@@ -17,25 +17,24 @@ from ._common import (
     FileEdit,
     apply_changes,
     collect_python_files,
+    find_module_path,
     find_project_root,
     get_lines,
-    module_to_path,
     parse_file,
+    parse_symbol_ref,
     resolve_relative_import,
 )
 
 
-def parse_symbol_ref(ref: str) -> tuple[str, str, str | None]:
-    if ":" not in ref:
-        print(f"ERROR: Symbol reference must be 'module:symbol' (got '{ref}')", file=sys.stderr)
-        sys.exit(1)
-    module, symbol_path = ref.split(":", 1)
-    parts = symbol_path.split(".", 1)
-    return module, parts[0], parts[1] if len(parts) > 1 else None
-
-
 @dataclass
 class TrackedImport:
+    """An import statement that brings the target function into scope.
+
+    ``is_module_import`` is ``True`` when the file imports the module
+    (``import mod``) rather than the function directly (``from mod import fn``).
+    In that case ``module_alias`` holds the local name used for the module.
+    """
+
     node: ast.stmt
     local_name: str
     is_module_import: bool
@@ -49,37 +48,60 @@ def find_imports_of_symbol(
     target_module: str,
     target_symbol: str,
 ) -> list[TrackedImport]:
+    """Find all import nodes in *tree* that bring *target_symbol* into scope.
+
+    Args:
+        tree: Parsed AST of the file to inspect.
+        filepath: Path of the file (used for relative import resolution).
+        root: Project root.
+        target_module: Dotted module name where the symbol is defined.
+        target_symbol: Name of the symbol whose call sites are being rewritten.
+
+    Returns:
+        List of :class:`TrackedImport` objects for each matching import.
+    """
     results = []
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name == target_module or alias.name.startswith(target_module + "."):
-                    results.append(TrackedImport(
-                        node=node,
-                        local_name=target_symbol,
-                        is_module_import=True,
-                        module_alias=alias.asname or alias.name.split(".")[0],
-                    ))
+                    results.append(
+                        TrackedImport(
+                            node=node,
+                            local_name=target_symbol,
+                            is_module_import=True,
+                            module_alias=alias.asname or alias.name.split(".")[0],
+                        )
+                    )
         elif isinstance(node, ast.ImportFrom):
             resolved = (
-                resolve_relative_import(filepath, root, node.level, node.module)
-                if node.level > 0 else node.module
+                resolve_relative_import(filepath, root, node.level, node.module) if node.level > 0 else node.module
             )
             if resolved == target_module:
                 for alias in node.names:
                     if alias.name in (target_symbol, "*"):
-                        results.append(TrackedImport(
-                            node=node,
-                            local_name=alias.asname or target_symbol,
-                            is_module_import=False,
-                        ))
+                        results.append(
+                            TrackedImport(
+                                node=node,
+                                local_name=alias.asname or target_symbol,
+                                is_module_import=False,
+                            )
+                        )
     return results
 
 
 # ─── Signature Logic ─────────────────────────────────────────────────────────
 
+
 @dataclass
 class ParamInfo:
+    """Metadata for a single function parameter.
+
+    ``kind`` is one of ``"regular"``, ``"keyword_only"``, ``"positional_only"``,
+    ``"*args"``, or ``"**kwargs"``.
+    ``annotation`` and ``default`` are unparsed source strings, or ``None``.
+    """
+
     name: str
     annotation: str | None = None
     default: str | None = None
@@ -88,6 +110,12 @@ class ParamInfo:
 
 @dataclass
 class SignatureChange:
+    """A single requested change to a function signature.
+
+    ``action`` is one of ``"add"``, ``"remove"``, ``"rename"``, ``"reorder"``,
+    or ``"set_default"``. The remaining fields are action-specific.
+    """
+
     action: str  # add, remove, rename, reorder, set_default
     param_name: str
     new_name: str | None = None
@@ -98,6 +126,18 @@ class SignatureChange:
 
 
 def extract_params(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ParamInfo]:
+    """Extract all parameters from *func_node* as :class:`ParamInfo` objects.
+
+    Handles positional-only, regular, ``*args``, keyword-only, and ``**kwargs``
+    parameters. Defaults are represented as unparsed source strings via
+    ``ast.unparse``.
+
+    Args:
+        func_node: The function definition AST node to extract from.
+
+    Returns:
+        Ordered list of :class:`ParamInfo` objects matching the parameter list.
+    """
     params = []
 
     # positional-only
@@ -111,50 +151,61 @@ def extract_params(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[Pa
     for i, arg in enumerate(func_node.args.posonlyargs):
         di = i - defaults_offset
         default = ast.unparse(all_defaults[di]) if 0 <= di < len(all_defaults) else None
-        params.append(ParamInfo(
-            name=arg.arg,
-            annotation=ast.unparse(arg.annotation) if arg.annotation else None,
-            default=default,
-            kind="positional_only",
-        ))
+        params.append(
+            ParamInfo(
+                name=arg.arg,
+                annotation=ast.unparse(arg.annotation) if arg.annotation else None,
+                default=default,
+                kind="positional_only",
+            )
+        )
 
     for i, arg in enumerate(func_node.args.args):
         di = n_pos_only + i - defaults_offset
         default = ast.unparse(all_defaults[di]) if 0 <= di < len(all_defaults) else None
-        params.append(ParamInfo(
-            name=arg.arg,
-            annotation=ast.unparse(arg.annotation) if arg.annotation else None,
-            default=default,
-            kind="regular",
-        ))
+        params.append(
+            ParamInfo(
+                name=arg.arg,
+                annotation=ast.unparse(arg.annotation) if arg.annotation else None,
+                default=default,
+                kind="regular",
+            )
+        )
 
     if func_node.args.vararg:
-        params.append(ParamInfo(
-            name=func_node.args.vararg.arg,
-            annotation=ast.unparse(func_node.args.vararg.annotation) if func_node.args.vararg.annotation else None,
-            kind="*args",
-        ))
+        params.append(
+            ParamInfo(
+                name=func_node.args.vararg.arg,
+                annotation=ast.unparse(func_node.args.vararg.annotation) if func_node.args.vararg.annotation else None,
+                kind="*args",
+            )
+        )
 
     for i, arg in enumerate(func_node.args.kwonlyargs):
         kd = func_node.args.kw_defaults[i] if i < len(func_node.args.kw_defaults) else None
-        params.append(ParamInfo(
-            name=arg.arg,
-            annotation=ast.unparse(arg.annotation) if arg.annotation else None,
-            default=ast.unparse(kd) if kd is not None else None,
-            kind="keyword_only",
-        ))
+        params.append(
+            ParamInfo(
+                name=arg.arg,
+                annotation=ast.unparse(arg.annotation) if arg.annotation else None,
+                default=ast.unparse(kd) if kd is not None else None,
+                kind="keyword_only",
+            )
+        )
 
     if func_node.args.kwarg:
-        params.append(ParamInfo(
-            name=func_node.args.kwarg.arg,
-            annotation=ast.unparse(func_node.args.kwarg.annotation) if func_node.args.kwarg.annotation else None,
-            kind="**kwargs",
-        ))
+        params.append(
+            ParamInfo(
+                name=func_node.args.kwarg.arg,
+                annotation=ast.unparse(func_node.args.kwarg.annotation) if func_node.args.kwarg.annotation else None,
+                kind="**kwargs",
+            )
+        )
 
     return params
 
 
 def params_to_str(params: list[ParamInfo]) -> str:
+    """Serialize *params* back to a comma-separated parameter-list string."""
     parts = []
     needs_slash = False
     added_slash = False
@@ -180,6 +231,7 @@ def params_to_str(params: list[ParamInfo]) -> str:
         if p.annotation:
             s += f": {p.annotation}"
         if p.default is not None:
+            # PEP 8: spaces around = when annotation is present, no spaces otherwise
             s += f" = {p.default}" if p.annotation else f"={p.default}"
         parts.append(s)
 
@@ -190,6 +242,15 @@ def params_to_str(params: list[ParamInfo]) -> str:
 
 
 def mutate_params(params: list[ParamInfo], changes: list[SignatureChange]) -> list[ParamInfo]:
+    """Apply *changes* to *params* in order and return the updated parameter list.
+
+    Args:
+        params: Current parameter list (will not be mutated; a copy is made).
+        changes: Ordered list of signature changes to apply.
+
+    Returns:
+        New parameter list after all changes have been applied.
+    """
     result = list(params)
     for ch in changes:
         if ch.action == "remove":
@@ -234,18 +295,23 @@ def mutate_params(params: list[ParamInfo], changes: list[SignatureChange]) -> li
 
 
 class CallFinder(ast.NodeVisitor):
-    def __init__(self, func_name: str, is_module_import: bool, module_alias: str | None):
+    """AST visitor that collects all ``ast.Call`` nodes for a target function."""
+
+    def __init__(self, func_name: str, is_module_import: bool, module_alias: str | None) -> None:
         self.func_name = func_name
         self.is_module_import = is_module_import
         self.module_alias = module_alias
         self.calls: list[ast.Call] = []
 
-    def visit_Call(self, node):
+    def visit_Call(self, node: ast.Call) -> None:
+        """Record *node* if it calls the target function."""
         if self.is_module_import:
-            if (isinstance(node.func, ast.Attribute) and
-                    isinstance(node.func.value, ast.Name) and
-                    node.func.value.id == self.module_alias and
-                    node.func.attr == self.func_name):
+            if (
+                isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == self.module_alias
+                and node.func.attr == self.func_name
+            ):
                 self.calls.append(node)
         else:
             if isinstance(node.func, ast.Name) and node.func.id == self.func_name:
@@ -258,6 +324,19 @@ def find_matching_paren(
     start_line: int,
     start_col: int,
 ) -> tuple[int, int] | None:
+    """Locate the closing parenthesis that matches the ``(`` at *start_line*/*start_col*.
+
+    Uses the tokenizer on the source from *start_line* onward so that
+    string literals and comments containing ``(`` or ``)`` are handled correctly.
+
+    Args:
+        lines: All source lines of the file.
+        start_line: 0-based line index of the opening ``(``.
+        start_col: Column index of the opening ``(``.
+
+    Returns:
+        ``(line_idx, col)`` of the matching ``)``, or ``None`` on tokenizer error.
+    """
     slice_src = "".join(lines[start_line:])
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(slice_src).readline))
@@ -291,12 +370,25 @@ def rewrite_call(
     old_params: list[ParamInfo],
     changes: list[SignatureChange],
 ) -> FileEdit | None:
+    """Rewrite the argument list of *call* to match the new signature.
+
+    Converts positional arguments to keyword form for clarity, applies renames
+    and removals, and inserts ``# TODO`` placeholders for required new parameters
+    without defaults.
+
+    Args:
+        call: The ``ast.Call`` node whose arguments to rewrite.
+        lines: Source lines of the file containing *call*.
+        old_params: Parameter list of the function *before* the change.
+        changes: Signature changes being applied.
+
+    Returns:
+        A :class:`FileEdit` replacing the argument span, or ``None`` if no
+        rewrite is needed or the parenthesis span cannot be located.
+    """
     if not call.args and not call.keywords:
         # Check if we need to add a non-default arg
-        needs_add = any(
-            ch.action == "add" and ch.new_default is None
-            for ch in changes
-        )
+        needs_add = any(ch.action == "add" and ch.new_default is None for ch in changes)
         if not needs_add:
             return None
 
@@ -365,6 +457,16 @@ def rewrite_call(
 def find_func_in_tree(
     tree: ast.Module, func_name: str, class_name: str | None = None
 ) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    """Locate a function (or method) definition node in *tree*.
+
+    Args:
+        tree: Module AST to search.
+        func_name: Name of the function to find.
+        class_name: When set, search only inside the class with this name.
+
+    Returns:
+        The matching ``FunctionDef`` or ``AsyncFunctionDef`` node, or ``None``.
+    """
     if class_name:
         for node in ast.iter_child_nodes(tree):
             if isinstance(node, ast.ClassDef) and node.name == class_name:
@@ -384,6 +486,18 @@ def do_signature(
     root: Path,
     dry_run: bool,
 ) -> bool:
+    """Apply signature *changes* to *target_ref* and rewrite all call sites.
+
+    Args:
+        target_ref: Function reference in ``"module:function"`` or
+            ``"module:Class.method"`` format.
+        changes: Ordered list of :class:`SignatureChange` objects to apply.
+        root: Project root directory.
+        dry_run: Preview changes without writing files.
+
+    Returns:
+        ``True`` on success, ``False`` if the module or function cannot be found.
+    """
     module_name, symbol_name, method_name = parse_symbol_ref(target_ref)
     actual_func = method_name or symbol_name
 
@@ -391,9 +505,11 @@ def do_signature(
     print(f"  {module_name}:{symbol_name}" + (f".{method_name}" if method_name else ""))
     for ch in changes:
         if ch.action == "add":
-            print(f"    + add '{ch.param_name}'" +
-                  (f": {ch.new_type}" if ch.new_type else "") +
-                  (f" = {ch.new_default}" if ch.new_default is not None else "  [no default]"))
+            print(
+                f"    + add '{ch.param_name}'"
+                + (f": {ch.new_type}" if ch.new_type else "")
+                + (f" = {ch.new_default}" if ch.new_default is not None else "  [no default]")
+            )
         elif ch.action == "remove":
             print(f"    - remove '{ch.param_name}'")
         elif ch.action == "rename":
@@ -405,7 +521,7 @@ def do_signature(
     print(f"  Root: {root}")
     print()
 
-    def_path = module_to_path(module_name, root)
+    def_path = find_module_path(module_name, root)
     if def_path is None or not def_path.exists():
         print(f"ERROR: Cannot find module '{module_name}'", file=sys.stderr)
         return False
@@ -447,14 +563,16 @@ def do_signature(
 
     all_changes: list[FileChanges] = []
     fc_def = FileChanges(filepath=def_path)
-    fc_def.edits.append(FileEdit(
-        start_line=start_l,
-        end_line=close_l,
-        start_col=paren_col,
-        end_col=close_c + 1,
-        new_text=f"({params_to_str(new_params)})",
-        description="Rewrite def signature",
-    ))
+    fc_def.edits.append(
+        FileEdit(
+            start_line=start_l,
+            end_line=close_l,
+            start_col=paren_col,
+            end_col=close_c + 1,
+            new_text=f"({params_to_str(new_params)})",
+            description="Rewrite def signature",
+        )
+    )
     all_changes.append(fc_def)
 
     # Rewrite call sites
@@ -473,8 +591,9 @@ def do_signature(
             finder.visit(tree)
             fc = fc_def
         else:
-            imports = find_imports_of_symbol(tree, pyfile, root, module_name,
-                                             symbol_name if not method_name else symbol_name)
+            imports = find_imports_of_symbol(
+                tree, pyfile, root, module_name, symbol_name if not method_name else symbol_name
+            )
             if not imports:
                 continue
             imp = imports[0]
@@ -514,26 +633,48 @@ def do_signature(
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
+    """CLI entry point: parse arguments and invoke :func:`do_signature`."""
     parser = argparse.ArgumentParser(
         description="Change a Python function signature and update all call sites.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
     parser.add_argument("target", help="module:function or module:Class.method")
-    parser.add_argument("--add", metavar=("NAME", "TYPE", "DEFAULT"), nargs="+",
-                        action="append", dest="adds", default=[],
-                        help="Add a parameter: NAME [TYPE [DEFAULT]]")
-    parser.add_argument("--remove", metavar="NAME", action="append", dest="removes", default=[],
-                        help="Remove a parameter")
-    parser.add_argument("--rename", metavar=("OLD", "NEW"), nargs=2,
-                        action="append", dest="renames", default=[],
-                        help="Rename a parameter")
-    parser.add_argument("--reorder", metavar="NAME", nargs="+", dest="reorder",
-                        help="Specify the desired parameter order")
-    parser.add_argument("--set-default", metavar=("NAME", "VALUE"), nargs="+",
-                        action="append", dest="set_defaults", default=[],
-                        help="Change a parameter default: NAME VALUE [TYPE]")
+    parser.add_argument(
+        "--add",
+        metavar="NAME",
+        nargs="+",
+        action="append",
+        dest="adds",
+        default=[],
+        help="Add a parameter: NAME [TYPE [DEFAULT]]",
+    )
+    parser.add_argument(
+        "--remove", metavar="NAME", action="append", dest="removes", default=[], help="Remove a parameter"
+    )
+    parser.add_argument(
+        "--rename",
+        metavar=("OLD", "NEW"),
+        nargs=2,
+        action="append",
+        dest="renames",
+        default=[],
+        help="Rename a parameter",
+    )
+    parser.add_argument(
+        "--reorder", metavar="NAME", nargs="+", dest="reorder", help="Specify the desired parameter order"
+    )
+    parser.add_argument(
+        "--set-default",
+        metavar="NAME",
+        nargs="+",
+        action="append",
+        dest="set_defaults",
+        default=[],
+        help="Change a parameter default: NAME VALUE [TYPE]",
+    )
     parser.add_argument("--project-root", "-r", help="Project root (auto-detected if omitted)")
     parser.add_argument("--dry-run", "-n", action="store_true")
 
@@ -545,12 +686,14 @@ def main() -> None:
     changes: list[SignatureChange] = []
 
     for parts in args.adds:
-        changes.append(SignatureChange(
-            action="add",
-            param_name=parts[0],
-            new_type=parts[1] if len(parts) > 1 else None,
-            new_default=parts[2] if len(parts) > 2 else None,
-        ))
+        changes.append(
+            SignatureChange(
+                action="add",
+                param_name=parts[0],
+                new_type=parts[1] if len(parts) > 1 else None,
+                new_default=parts[2] if len(parts) > 2 else None,
+            )
+        )
 
     for name in args.removes:
         changes.append(SignatureChange(action="remove", param_name=name))
@@ -564,12 +707,14 @@ def main() -> None:
     for parts in args.set_defaults:
         if len(parts) < 2:
             parser.error("--set-default requires NAME and VALUE")
-        changes.append(SignatureChange(
-            action="set_default",
-            param_name=parts[0],
-            new_default=parts[1],
-            new_type=parts[2] if len(parts) > 2 else None,
-        ))
+        changes.append(
+            SignatureChange(
+                action="set_default",
+                param_name=parts[0],
+                new_default=parts[1],
+                new_type=parts[2] if len(parts) > 2 else None,
+            )
+        )
 
     root = Path(args.project_root).resolve() if args.project_root else find_project_root(Path.cwd())
     success = do_signature(args.target, changes, root, args.dry_run)

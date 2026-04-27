@@ -10,6 +10,7 @@ from .pyfindrefs import find_refs
 
 
 def main() -> None:
+    """CLI entry point: parse arguments and print call-type references only."""
     parser = argparse.ArgumentParser(description="Find all call sites of a Python function.")
     parser.add_argument("target", help="module:function or module:Class.method")
     parser.add_argument("--project-root", help="Project root directory")

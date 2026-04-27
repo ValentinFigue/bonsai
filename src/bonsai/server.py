@@ -1,3 +1,5 @@
+"""FastMCP server exposing all bonsai refactoring tools as MCP endpoints."""
+
 import contextlib
 import io
 import sys
@@ -17,6 +19,20 @@ mcp = FastMCP("pytools")
 
 
 def _run(main_fn: Callable[[], None], argv: list[str]) -> str:
+    """Invoke *main_fn* with *argv* and return its combined stdout/stderr output.
+
+    Captures stdout and stderr via ``contextlib.redirect_*``, temporarily
+    replaces ``sys.argv``, and suppresses ``SystemExit`` so CLI tools can be
+    called safely from within the MCP server process.
+
+    Args:
+        main_fn: A CLI ``main()`` function that reads ``sys.argv``.
+        argv: Argument vector to set (``argv[0]`` is the program name).
+
+    Returns:
+        Stripped combined output string, or ``"Done."`` when the tool produced
+        no output.
+    """
     buf = io.StringIO()
     err = io.StringIO()
     old_argv = sys.argv
@@ -188,15 +204,15 @@ def pysignature(
         dry_run: Preview changes without modifying any files
     """
     argv = ["pysignature", target]
-    for item in (add or []):
+    for item in add or []:
         argv += ["--add"] + item.split()
-    for name in (remove or []):
+    for name in remove or []:
         argv += ["--remove", name]
-    for pair in (rename or []):
+    for pair in rename or []:
         argv += ["--rename"] + pair.split()
     if reorder:
         argv += ["--reorder"] + reorder
-    for item in (set_default or []):
+    for item in set_default or []:
         argv += ["--set-default"] + item.split()
     if project_root:
         argv += ["--project-root", project_root]

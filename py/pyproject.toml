@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bonsai-py"
-version = "0.2.0"
+version = "0.2.1"
 description = "AST-based Python refactoring tools as a Claude Code MCP plugin"
 readme = "../README.md"
 license = { file = "../LICENSE" }

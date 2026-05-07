@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-07
+
+### Added
+- `--no-hook` flag on `install.sh`: skips hook registration entirely, useful when aether manages the hook lifecycle
+- `<!-- aether:start -->` guard in `install.sh --claude-md`: skips bonsai block injection when an aether unified block is already present, preventing duplicate content
+
+### Changed
+- `templates/CLAUDE.md` sentinel markers (`<!-- bonsai:start/end -->`) moved from the template file into `install.sh`, making sentinel ownership explicit and aligning with cairn's pattern
+
 ## [0.2.0] - 2026-05-07
 
 ### Added

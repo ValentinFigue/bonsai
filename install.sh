@@ -4,11 +4,13 @@ set -e
 # ── options ────────────────────────────────────────────────────────────────────
 INJECT_CLAUDE_MD=false
 PUBLISHED=false        # set to true once bonsai-py is on PyPI and bonsai-ts is on npm
+WITH_HOOK=true
 for arg in "$@"; do
   case "$arg" in
     --claude-md) INJECT_CLAUDE_MD=true ;;
     --published) PUBLISHED=true ;;
-    *) echo "Unknown option: $arg"; echo "Usage: $0 [--claude-md] [--published]"; exit 1 ;;
+    --no-hook)   WITH_HOOK=false ;;
+    *) echo "Unknown option: $arg"; echo "Usage: $0 [--claude-md] [--published] [--no-hook]"; exit 1 ;;
   esac
 done
 
@@ -152,6 +154,7 @@ else:
     print("  ✓ permissions already present")
 PYEOF
 
+if [ "$WITH_HOOK" = true ]; then
 # ── hooks ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "==> Registering PreToolUse and PostToolUse hooks in ~/.claude/settings.json"
@@ -213,6 +216,9 @@ os.replace(tmp, settings_path)
 print("  ✓ PreToolUse Bash nudge hook registered (enforce-bonsai.sh)")
 print("  ✓ PostToolUse reference-drift hook registered (post-bonsai.sh)")
 PYEOF
+else
+  check_ok "hook registration skipped (--no-hook)"
+fi
 
 # ── skills ─────────────────────────────────────────────────────────────────────
 echo ""
@@ -248,11 +254,17 @@ if [ "$INJECT_CLAUDE_MD" = true ]; then
   TEMPLATE_PATH="$REPO_ROOT/templates/CLAUDE.md"
   mkdir -p "$HOME/.claude"
 
-  if [ -f "$CLAUDE_MD_PATH" ] && grep -q "<!-- bonsai:start -->" "$CLAUDE_MD_PATH"; then
+  if [ -f "$CLAUDE_MD_PATH" ] && grep -q "<!-- aether:start -->" "$CLAUDE_MD_PATH"; then
+    check_ok "aether block present — bonsai section already covered (skipping)"
+  elif [ -f "$CLAUDE_MD_PATH" ] && grep -q "<!-- bonsai:start -->" "$CLAUDE_MD_PATH"; then
     check_ok "bonsai section already present (skipping)"
   else
     printf "\n" >> "$CLAUDE_MD_PATH"
-    cat "$TEMPLATE_PATH" >> "$CLAUDE_MD_PATH"
+    {
+      echo "<!-- bonsai:start -->"
+      cat "$TEMPLATE_PATH"
+      echo "<!-- bonsai:end -->"
+    } >> "$CLAUDE_MD_PATH"
     check_ok "bonsai section added to $CLAUDE_MD_PATH"
   fi
 fi

@@ -1,4 +1,3 @@
-<!-- bonsai:start -->
 ## AST refactoring with bonsai
 
 When editing `.py`, `.ts`, `.tsx`, `.js`, or `.jsx` files, prefer bonsai MCP
@@ -44,4 +43,3 @@ Reach for bonsai — without waiting for the hook to nudge — in these situatio
 - Comment-only or docstring-only changes — no symbol impact, text edit is fine
 - Exploratory `grep` to understand a codebase — use raw grep, no structural
   change is being made
-<!-- bonsai:end -->
